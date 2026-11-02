@@ -1,12 +1,12 @@
 """Sound for the park walk: footsteps on paving, kick thumps + whooshes, stone bounces, park birds and breeze,
 and a small bouncy oom-pah tune locked to the step tempo. Uses the skill's own DSP kit (templates/audio).
-Usage: python tools/sound.py out/events.json out/mix.wav"""
+Usage (from the project folder): python3 tools/sound.py out/events.json out/mix.wav"""
 import json, sys
 from pathlib import Path
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[2] / "claude-animated-shorts-main/templates/audio"))
+sys.path.insert(0, str(HERE.parents[2] / "kit/templates/audio"))  # repo root / kit
 from dsp import SR, ns, tt, rng, lp, hp, bp, modal, phase, pan, place, fades, integrated, true_peak, dbg, write_wav, make_ir, convolve_st  # noqa: E402
 from sfx_gen import stroll_step, whoosh, bird_chirps, breeze, push_thump  # noqa: E402
 

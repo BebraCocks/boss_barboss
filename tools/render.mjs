@@ -1,7 +1,11 @@
-// Renders the three.js short in headless Chromium (WebGL via SwiftShader) frame by frame.
-//   node tools/render.mjs stills out/stills 0,45,90 [scale]   -> PNG stills
-//   node tools/render.mjs video out/video_noaudio.mp4 [scale] -> H.264 (frames piped into ffmpeg)
-//   node tools/render.mjs events out/events.json              -> sound event table
+// Renders a project's three.js scene in headless Chromium (WebGL via SwiftShader, no GPU, no Blender) frame by frame.
+// Run from anywhere; paths after <project> are relative to the project folder.
+//   node tools/render.mjs projects/<name> stills out/stills 0,45,90 [scale=0.5] -> PNG stills
+//   node tools/render.mjs projects/<name> video out/draft.mp4 0.5              -> silent draft video
+//   node tools/render.mjs projects/<name> video out/video_noaudio.mp4 1        -> full 1080x1920 picture
+//   node tools/render.mjs projects/<name> events out/events.json               -> sound event table
+// A project page must expose window.READY, window.META {FPS, FRAMES}, window.renderFrame(i) -> PNG data URL,
+// and optionally window.EVENTS (for the sound).
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
@@ -11,9 +15,13 @@ import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
 let chromium;
-try { ({ chromium } = require("playwright")); } catch { ({ chromium } = require(path.join(process.env.NPM_GLOBAL ?? "/usr/local/lib/node_modules", "playwright"))); }
+try { ({ chromium } = require("playwright")); } catch {
+  const { execSync } = require("node:child_process");
+  const g = process.env.NPM_GLOBAL ?? execSync("npm root -g").toString().trim();
+  ({ chromium } = require(path.join(g, "playwright")));
+}
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."); // repo root (serves /node_modules)
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".json": "application/json", ".png": "image/png", ".webp": "image/webp" };
 const server = http.createServer((req, res) => {
   const p = path.join(ROOT, decodeURIComponent(new URL(req.url, "http://x").pathname));
@@ -24,13 +32,18 @@ const server = http.createServer((req, res) => {
 await new Promise((r) => server.listen(0, r));
 const port = server.address().port;
 
-const [mode = "stills", out = "out/stills", a3, a4] = process.argv.slice(2);
+const [projArg, mode = "stills", outArg = "out/stills", a3, a4] = process.argv.slice(2);
+if (!projArg) { console.error("usage: node tools/render.mjs projects/<name> stills|video|events <out> [...]"); process.exit(1); }
+const PROJ = path.resolve(projArg);
+if (!PROJ.startsWith(ROOT) || !fs.existsSync(path.join(PROJ, "src/index.html"))) { console.error(`no src/index.html in ${PROJ}`); process.exit(1); }
+const out = path.resolve(PROJ, outArg);
+const pageUrl = "/" + path.relative(ROOT, path.join(PROJ, "src/index.html")).split(path.sep).join("/");
 const scale = Number(mode === "stills" ? a4 ?? 0.5 : a3 ?? 1);
 const browser = await chromium.launch({ args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] });
 const page = await browser.newPage({ viewport: { width: Math.round(1080 * scale), height: Math.round(1920 * scale) } });
 page.on("console", (m) => { if (m.type() === "error" || m.type() === "warning") console.log("[page]", m.text()); });
 page.on("pageerror", (e) => console.log("[pageerror]", e.message));
-await page.goto(`http://127.0.0.1:${port}/src/index.html?scale=${scale}`);
+await page.goto(`http://127.0.0.1:${port}${pageUrl}?scale=${scale}`);
 await page.waitForFunction(() => window.READY === true, null, { timeout: 120000 });
 const meta = await page.evaluate(() => window.META);
 

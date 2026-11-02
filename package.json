@@ -1,0 +1,9 @@
+{
+  "name": "boss-barboss-videos",
+  "private": true,
+  "type": "module",
+  "description": "Vertical cartoon shorts rendered with three.js in headless Chromium (no Blender).",
+  "dependencies": {
+    "three": "0.170.0"
+  }
+}
